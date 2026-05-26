@@ -1,0 +1,136 @@
+{
+  "rabbit_version": "4.0.0",
+  "users": [
+    {
+      "name": "app",
+      "password": "app",
+      "tags": "administrator"
+    }
+  ],
+  "vhosts": [
+    { "name": "/" }
+  ],
+  "permissions": [
+    {
+      "user": "app",
+      "vhost": "/",
+      "configure": ".*",
+      "write": ".*",
+      "read": ".*"
+    }
+  ],
+  "exchanges": [
+    {
+      "name": "notifications.direct",
+      "vhost": "/",
+      "type": "direct",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "notifications.wait",
+      "vhost": "/",
+      "type": "direct",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "jobs.direct",
+      "vhost": "/",
+      "type": "direct",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "jobs.wait",
+      "vhost": "/",
+      "type": "direct",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    }
+  ],
+  "queues": [
+    {
+      "name": "notifications",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "notifications.wait",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum",
+        "x-dead-letter-exchange": "notifications.direct",
+        "x-dead-letter-routing-key": "notify"
+      }
+    },
+    {
+      "name": "jobs",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum"
+      }
+    },
+    {
+      "name": "jobs_schedule",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "quorum",
+        "x-dead-letter-exchange": "jobs.direct",
+        "x-dead-letter-routing-key": "job"
+      }
+    }
+  ],
+  "bindings": [
+    {
+      "source": "notifications.direct",
+      "vhost": "/",
+      "destination": "notifications",
+      "destination_type": "queue",
+      "routing_key": "notify",
+      "arguments": {}
+    },
+    {
+      "source": "notifications.wait",
+      "vhost": "/",
+      "destination": "notifications.wait",
+      "destination_type": "queue",
+      "routing_key": "notify",
+      "arguments": {}
+    },
+    {
+      "source": "jobs.direct",
+      "vhost": "/",
+      "destination": "jobs",
+      "destination_type": "queue",
+      "routing_key": "job",
+      "arguments": {}
+    },
+    {
+      "source": "jobs.wait",
+      "vhost": "/",
+      "destination": "jobs_schedule",
+      "destination_type": "queue",
+      "routing_key": "job",
+      "arguments": {}
+    }
+  ]
+}

@@ -1,0 +1,137 @@
+name: celery-rmq-quorum
+
+x-rabbit-env: &rabbit-env
+  RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE:-a-long-shared-secret-cookie}
+  RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-app}
+  RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-app}
+
+x-rabbit-healthcheck: &rabbit-healthcheck
+  test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+  interval: 10s
+  timeout: 10s
+  retries: 12
+  start_period: 30s
+
+x-app-env: &app-env
+  CELERY_BROKER_URL: "pyamqp://app:app@rabbit1:5672;pyamqp://app:app@rabbit2:5672;pyamqp://app:app@rabbit3:5672//"
+  PYTHONUNBUFFERED: "1"
+
+services:
+  rabbit1:
+    build: ./rabbitmq
+    hostname: rabbit1
+    container_name: rabbit1
+    environment: *rabbit-env
+    volumes:
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+      - ./rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+      - rabbit1_data:/var/lib/rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks: [rmq]
+    healthcheck: *rabbit-healthcheck
+
+  rabbit2:
+    build: ./rabbitmq
+    hostname: rabbit2
+    container_name: rabbit2
+    environment: *rabbit-env
+    volumes:
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+      - ./rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+      - rabbit2_data:/var/lib/rabbitmq
+    networks: [rmq]
+    healthcheck: *rabbit-healthcheck
+    depends_on:
+      rabbit1:
+        condition: service_healthy
+
+  rabbit3:
+    build: ./rabbitmq
+    hostname: rabbit3
+    container_name: rabbit3
+    environment: *rabbit-env
+    volumes:
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+      - ./rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+      - rabbit3_data:/var/lib/rabbitmq
+    networks: [rmq]
+    healthcheck: *rabbit-healthcheck
+    depends_on:
+      rabbit1:
+        condition: service_healthy
+
+  # One-shot init: after all 3 nodes are healthy, ensure both quorum queues
+  # have members on all 3 nodes. definitions.json loaded on rabbit1 before
+  # the other nodes joined, so the queues were created with 1 member each;
+  # this container grows them to 3.
+  rabbit-init:
+    image: rabbitmq:4-management
+    container_name: rabbit_init
+    user: "0:0"
+    environment:
+      RABBITMQ_ERLANG_COOKIE: ${RABBITMQ_ERLANG_COOKIE:-a-long-shared-secret-cookie}
+    networks: [rmq]
+    depends_on:
+      rabbit1: { condition: service_healthy }
+      rabbit2: { condition: service_healthy }
+      rabbit3: { condition: service_healthy }
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -e
+        echo "[rabbit-init] installing erlang cookie"
+        printf '%s' "$$RABBITMQ_ERLANG_COOKIE" > /var/lib/rabbitmq/.erlang.cookie
+        chown rabbitmq:rabbitmq /var/lib/rabbitmq/.erlang.cookie
+        chmod 400 /var/lib/rabbitmq/.erlang.cookie
+        echo "[rabbit-init] waiting for rabbit@rabbit1 startup"
+        gosu rabbitmq rabbitmqctl --node rabbit@rabbit1 await_startup
+        echo "[rabbit-init] growing quorum queues to rabbit2 + rabbit3"
+        gosu rabbitmq rabbitmq-queues --node rabbit@rabbit1 grow rabbit@rabbit2 all || true
+        gosu rabbitmq rabbitmq-queues --node rabbit@rabbit1 grow rabbit@rabbit3 all || true
+        echo "[rabbit-init] final state:"
+        gosu rabbitmq rabbitmqctl --node rabbit@rabbit1 list_queues name type messages members
+        echo "[rabbit-init] done"
+    restart: "no"
+
+  worker:
+    build: ./app
+    container_name: notify_worker
+    environment:
+      <<: *app-env
+      ROLE: worker
+      RESULT_DIR: /app/result
+    volumes:
+      - ./result:/app/result
+    networks: [rmq]
+    depends_on:
+      rabbit-init:
+        condition: service_completed_successfully
+
+  producer:
+    build: ./app
+    container_name: notify_producer
+    profiles: ["tools"]
+    environment:
+      <<: *app-env
+      ROLE: producer
+    volumes:
+      - ./batches:/app/batches:ro
+    networks: [rmq]
+    depends_on:
+      rabbit-init:
+        condition: service_completed_successfully
+    command: ["--help"]
+
+networks:
+  rmq:
+    driver: bridge
+
+volumes:
+  rabbit1_data:
+  rabbit2_data:
+  rabbit3_data:

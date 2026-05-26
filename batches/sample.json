@@ -1,0 +1,6 @@
+[
+  { "recipient": "alice@example.com", "message": "welcome aboard" },
+  { "recipient": "bob@example.com",   "message": "shipment dispatched" },
+  { "recipient": "carol@example.com", "message": "reminder: payment due", "delay_ms": 3000 },
+  { "recipient": "dave@example.com",  "message": "scheduled report",      "delay_ms": 8000 }
+]
