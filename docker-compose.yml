@@ -99,7 +99,9 @@ services:
     restart: "no"
 
   worker:
-    build: ./app
+    build:
+      context: .
+      dockerfile: app/Dockerfile
     container_name: notify_worker
     environment:
       <<: *app-env
@@ -113,7 +115,9 @@ services:
         condition: service_completed_successfully
 
   producer:
-    build: ./app
+    build:
+      context: .
+      dockerfile: app/Dockerfile
     container_name: notify_producer
     profiles: ["tools"]
     environment:

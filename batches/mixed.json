@@ -1,0 +1,6 @@
+[
+  {"recipient": "x@y.com", "message": "notif now"},
+  {"recipient": "x@y.com", "message": "job now",     "queue": "jobs"},
+  {"recipient": "x@y.com", "message": "notif later", "delay_ms": 3000},
+  {"recipient": "x@y.com", "message": "job later",   "delay_ms": 5000, "queue": "jobs"}
+]

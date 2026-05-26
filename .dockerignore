@@ -1,0 +1,26 @@
+# keep the build context small now that it's the repo root
+.git
+.gitignore
+.env
+.env.example
+.venv
+__pycache__
+*.pyc
+.DS_Store
+
+# things the image doesn't need
+docs/
+result/
+batches/
+tmp/
+README.md
+Makefile
+docker-compose.yml
+
+# host-side scripts (the in-container producer is app/producer.py)
+producer.py
+
+# tooling / IDE
+.vscode
+.idea
+.claude
